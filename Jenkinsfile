@@ -1,30 +1,64 @@
 pipeline {
   agent any
-  environment { BASE_URL = credentials('BASE_URL') }
-  options { timeout(60); timestamps() }
+
+  environment {
+    BASE_URL = credentials('BASE_URL')
+    PLAYWRIGHT_JUNIT_OUTPUT_NAME = 'test-results/results.xml'
+  }
+
+  options {
+    timeout(time: 60, unit: 'MINUTES')
+    timestamps()
+  }
 
   stages {
-    stage('Checkout')         { steps { checkout scm } }
-    stage('Install deps')     { steps { sh 'npm ci' } }
-    stage('Install browsers') { steps { sh 'npx playwright install' } }
-    stage('Run tests')        { steps { sh 'npx playwright test --reporter=html,line,junit' } }
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
+
+    stage('Install deps') {
+      steps {
+        bat 'npm ci'
+      }
+    }
+
+    stage('Install browsers') {
+      steps {
+        bat 'npx playwright install'
+      }
+    }
+
+    stage('Run tests') {
+      steps {
+        bat 'if not exist test-results mkdir test-results'
+        bat 'npx playwright test --reporter=html,line,junit'
+      }
+    }
   }
 
   post {
     always {
-      archiveArtifacts artifacts: 'playwright-report/**', fingerprint: true
+      archiveArtifacts(
+        artifacts: 'playwright-report/**',
+        fingerprint: true,
+        allowEmptyArchive: true
+      )
 
       publishHTML(target: [
         reportDir            : 'playwright-report',
         reportFiles          : 'index.html',
         reportName           : 'Playwright Report',
         keepAll              : true,
-        allowMissing         : false,
+        allowMissing         : true,
         alwaysLinkToLastBuild: true
       ])
 
-      junit allowEmptyResults: true,
-            testResults      : 'test-results/*.xml'
+      junit(
+        allowEmptyResults: true,
+        testResults: 'test-results/*.xml'
+      )
     }
   }
 }
